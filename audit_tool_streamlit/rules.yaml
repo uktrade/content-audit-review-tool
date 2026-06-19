@@ -1,0 +1,123 @@
+# add new rules here.
+# rules follow a hierarchical pattern:
+  # category 
+    # whether the flag is for freshness, relevance or usability
+    # (it is also possible to create new categories)
+      # flag level
+        # the strength rating of this flag. Flags can be weak, moderate or strong.
+        # this is used to give some flags instant strong or moderate risk recommendation
+        # instead of treating all flags as weak.
+          # flag reason
+            # text denoting the reason for this flag
+              # flag variety
+                # this is optional, where there are slightly different versions of the flag for pdf and html
+
+# parameters for each rule are listed with -
+# all parameters must be met for content to be flagged
+
+rules:
+  user_relevance:
+    strong candidate for review:
+      no traffic:
+        html:
+          - file_extension == "html"
+          - sessions == 0
+        pdf:
+          - file_extension == "pdf"
+          - file_download_navigated == 0
+    weak candidate for review:
+      Rarely visited:
+        html:
+          - file_extension == "html"
+          - sessions > 0
+          - sessions < 100
+        pdf:
+          - file_extension == "pdf"
+          - file_download_navigated > 0
+          - file_download_navigated < 100
+  usability:
+    weak candidate for review:
+      non-html:
+        - file_extension == "pdf"
+        - has_accessible_version == false
+      poor readability:
+        - file_extension == "html"
+        - flesch_reading_ease_score < 50
+      popular pdf with no html equivalent:
+        - file_extension == "pdf"
+        - has_accessible_version == false
+        - file_download_navigated > 500
+  freshness:
+    strong candidate for review:
+      no updates in last 10 years:
+        html:
+          - file_extension == "html"
+          - public_updated_at < CURRENT_DATE - 10 years
+        pdf:
+          - file_extension == "pdf"
+          - pdf_modified < CURRENT_DATE - 10 years
+    weak candidate for review:
+      no updates in last 5 years:
+        html:
+          - file_extension == "html"
+          - public_updated_at < CURRENT_DATE - 5 years
+          - public_updated_at > CURRENT_DATE - 10 years
+        pdf:
+          - file_extension == "pdf"
+          - pdf_modified < CURRENT_DATE - 5 years
+          - pdf_modified > CURRENT_DATE - 10 years
+
+
+# if a content has all of these flags, it will automatically gain the new
+# recommendation level.
+
+interactions:
+  strong candidate for removal:
+    - all:
+      - "no traffic"
+      - "no updates in last 10 years"
+  moderate candidate for removal:
+    - all:
+      - "no traffic"
+      - "no updates in last 5 years"
+    - all:
+      - "no updates in last 10 years"
+      - "rarely visited"
+  consider converting to html:
+    - all:
+      - "popular pdf with no html equivalent"
+
+# recommendation levels from strongest to weakest:
+  # strong candidate for removal
+  # moderate candidate for removal
+  # weak candidate for removal
+  # strong candidate for review
+  # moderate candidate for review
+  # weak candidate for review
+  # not flagged
+
+# 1 or more "strong candidate for review" flags:
+  # strong review recommendation
+
+# otherwise:
+# 3 moderate or weak review flags:
+  # strong review recommendation
+
+# otherwise:
+# 2 moderate or weak review flags:
+  # moderate review recommendation
+
+# otherwise:
+# 1 moderate review flags:
+  # moderate review recommendation
+
+# otherwise:
+# 1 weak review flags:
+  # weak review recommendation
+
+
+# otherwise:
+# no flags:
+  # not flagged recommendation
+
+#  interactions take priorty if they give a higher recommendation than the rules would otherwise give it
