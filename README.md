@@ -1,94 +1,70 @@
-# audit-tool-streamlit
+# CART (Content Audit Review Tool)
 
-## Project Info
+## What this is
 
-### Description
+Content Audit Review Tool (CART) is a scalable content auditing tool that applies data-driven and rule-based approaches to evaluate GOV.UK content.
 
-A streamlit app to interact with the results of the audit tool for gov.uk rergulations removals
+It is not a plug-and-play product or package. The repository defines a structured framework and modular components that teams can adapt to their own data sources, content and audit requirements.
 
+## What CART does
 
-### Expected Outputs
+CART audits content by combining multiple data sources and applying defined rules to identify potential issues.
 
+It brings together:
 
+- GOV.UK content and publishing metadata
+- Google Analytics 4 (GA4) data (for traffic and engagement signals)
+- Crawl data (for structural and content insights)
+- Derived data – variables calculated from existing data to generate new insights, such as expected reading time
 
-### Data and Assumptions
+The output is a set of flags and metrics that help teams prioritise content improvements.
 
- 
+## What is included in this repo
 
-## How to use the code
+This repository contains the core components needed to run CART:
 
-This project uses the ADS cookiecutter. Generic guidance for using and developing cookiecut projects is below:
+- Audit rules: definitions of the checks used to flag content issues
+- Metrics definitions: standardised definitions for analytics and content metrics
+- Data pipeline approach: how content, analytics, and crawl data are collected and prepared
+- Transformation logic: processes for cleaning, standardising and joining datasets
+- Rules engine: Executable logic that applies rules and generates audit outputs
 
-### Development setup
+Together, these components provide a consistent, repeatable way to audit large volumes of content.
 
-After spinning up Theia/Jupyter, navigate to the project directory and run `. setup.sh` in the terminal. This will read from a previously cached conda environment and activate this if it exists, otherwise this will generate and cache this environment for future use. This will take a few minutes to install packages included in your `pyproject.toml`. 
+## Key constraints
 
-After running `. setup.sh` in your terminal,  the environment `audit-tool-streamlit` should appear in brackets at the start of the new command:
-```
-(audit-tool-streamlit) ~$ 
-```
-This can be deactivated using `conda deactivate` or activated using `conda activate audit-tool-streamlit`. Ensure this environment is selected when opening or adding new files to your project. The kernel can be selected on the top-right of your Jupyter window or bottom-left of your Theia window.
+CART is designed around a specific technical setup and is not directly portable:
 
-The cookiecutter structure installs packages through the `pyproject.toml` file - if you have any new requirements to add to your project, you'll need to add these to the dependencies section of the pyproject.toml file and then run `. setup.sh recreate` to save these or `. setup.sh recreate_temp` to install without caching.  
+- Implemented in DBT's Data Workspace - a secure data environment
+- Uses Streamlit for presenting outputs
+- Assumes access to GA4 export data and crawl outputs
+- Built around GOV.UK-specific structures (for example URLs, document types and formats), so would require adaptation to work with other content platforms
 
-### Importing from this project
+Teams adopting CART will need to adapt it to their own environment and data sources.
 
-To import functionality from this project into your own project, install it as a package:
+## How to use
 
-```
-pip install audit_tool_streamlit@git+ssh://git@gitlab.data.trade.gov.uk/ag-data-science/audit-tool-streamlit.git
-```
+If you are new to CART, start with:
 
-Or add it to your pyproject.toml:
+- docs/OVERVIEW to understand the purpose, users and value
+- docs/ADAPT_FOR_YOUR_DEPT for guidance on implementing CART in your context
 
-```
-dependencies = [
-    "audit_tool_streamlit@git+ssh://git@gitlab.data.trade.gov.uk/ag-data-science/audit-tool-streamlit.git"
-]
-```
+Then explore:
 
-## Other projects / resources / citations
+- Data pipeline and transformation documentation
+- Data dictionary
+- Rules logic
 
-<!--- _Refer to the repos of other's work that you've drawn on heavily, key resources for the project, or citing essential reading - all where required. This can also be a good place to link to the licensing in your repo if relevant._ -->
+## Repository structure
 
+At a high level, the repository is organised as follows:
+- /audit_tool_streamlit contains all code and analysis, including audit logic
+- /docs contains all supporting documentation (data dictionary, adaptation guidance, data sources etc)
 
--------------------------
+(See individual files for more detail.)
 
-## Project Management
+## Feedback and contributions
 
-### Author 
+If you have feedback, questions, or suggestions, please use GitHub Issues in this repository.
 
-Analytical Data Science
-
-### Developer Team
-<!--- _Details on the developer team and their roles in the project. Include any quality assurers._
-
-Name - Team - Role
-
-Name - Team - Role
-
-Name - Team - Role -->
-
-
-### Customer Details
-
-<!--- _Details on the customer team and their role in the project (e.g. are they now looking after the project long-term?)._
-
-Name - Team - Role
-
-Name - Team - Role
-
-Name - Team - Role
-
--->
-
-### Project Status
-Scoping/EDA/Development/Testing/Deployed/Paused
-
-<!---_This can include versioning if relevant._ -->
-
-<br />
-
-This project was set-up using the ADS cookiecutter. See the [ReadMe](https://gitlab.data.trade.gov.uk/ag-data-science/ads-cookiecutter/-/blob/main/README.md) for details on creating a cookiecut project.
-
-<p><small>Based on the <a target="_blank" href="https://drivendata.github.io/cookiecutter-data-science/">cookiecutter data science project template. </a>.</small></p>
+This helps us track improvements and support others using CART.
