@@ -22,7 +22,7 @@ The Search API allows us to define filters and fetch the content to be ingested 
 
 The Content API returns data in the form of JSONs for each content id/html page. These JSONs include a variety of data, ranging from the unique content_id, publishing dates, document types, taxonomy tags and the full text of the page. CART requires the data to be in tabular format/data frame. The pipeline code therefore manipulates the content API JSON data into one row per piece of content, with the column variables our interested metadata fields from the JSON. (More information on the GOV.UK Content API: https://www.api.gov.uk/gds/gov-uk-content/) 
 
-The exhaustive list of metadata fields we extract and ingest are listed below. The data is used throughout the repo and is mandatory for data insights. At the time of writing, the pipeline ingests ~50K pieces of content/rows. 
+The exhaustive list of metadata fields we extract and ingest are listed below. The data is used throughout the repo and is mandatory for data insights. At the time of writing in July 2026, the pipeline ingests ~50K pieces of content/rows. 
 
 Name: content_id, public_url, document_type, format, categories, publishing_orgs, primary_publishing_org, title, abstract, html, text, attachments, mimetypes, attachment_titles, attachment_types, linked_content_raw, linked_content, date_published, updated_at, public_updated_at, publishing_app, withdrawn, is_historic, 
 
