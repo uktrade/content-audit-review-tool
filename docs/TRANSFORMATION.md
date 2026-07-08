@@ -160,7 +160,7 @@ This is the final output, therefore we must write it to the catalogue.
 
 ```
 data = create_full_data()
-write_to_catalogue(data, "dbt", "gov_uk_content__regulation_xd",
+write_to_catalogue(data, "schema_name", "table_name",
                     convert_cols=["publishing_orgs", "categories", 'freshness_reasons', 'user_relevance_reasons', 'usability_reasons'])
 ```
 
