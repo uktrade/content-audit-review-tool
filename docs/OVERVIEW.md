@@ -1,16 +1,16 @@
-# Content audit tool overview
+# Content Audit Review Tool (CART) overview
 
-## Purpose of the audit tool
+## Purpose of the tool
 
-The content audit tool has been developed by the Proactive Content Management team in the Trade and Regulatory Services directorate of the Department for Business and Trade (DBT).
+CART has been developed by the Proactive Content Management team in the Trade and Regulatory Services directorate of the Department for Business and Trade (DBT).
 
 It identifies business guidance on GOV.UK that may need to be fixed, reviewed or removed.
 
 It aims to support content designers and content owners across government to improve this guidance, making it easier for businesses to comply with regulation and reduce their admin burden.
 
-The tool combines GOV.UK content metadata, Google Analytics data and crawl data. It then applies rules to identify red flags at scale.
+The tool combines GOV.UK content metadata, Google Analytics data and crawl data. It then applies rules to identify flags at scale.
 
-Red flags are signals that content may not meet certain quality thresholds, such as usability, accessibility or user need.
+Flags are signals that content may not meet certain quality thresholds, such as usability, accessibility or user need.
 
 The tool does not make final content decisions. It provides evidence and prioritisation signals to help content teams decide where human review is needed most.
 
@@ -22,7 +22,7 @@ This includes content published by other departments and agencies.
 
 Content improvement work starts with understanding what content already exists. But auditing large volumes of content is difficult. Current estimates suggest the GOV.UK business guidance estate could contain between 100,000 and 200,000 pages, and it continues to grow faster than teams can realistically review manually.
 
-The audit tool has been developed to make large-scale content auditing quicker, more consistent, repeatable and evidence-based.
+The tool has been developed to make large-scale content auditing quicker, more consistent, repeatable and evidence-based.
 
 It is intended to support content improvement by:
 
@@ -56,7 +56,7 @@ These outputs help teams:
 
 ## What the tool does
 
-The tool currently has 6 main elements.
+The tool currently has 5 main elements.
 
 ### 1. Data pipeline
 
@@ -70,9 +70,9 @@ This creates a structured dataset that can be analysed, filtered and exported.
 
 For more detail, see:
 
-`docs/data-pipelines.md`
+`docs/DATA_PIPELINE.md`
 
-### 2. Red-flag rules
+### 2. Flag rules
 
 The tool applies rules to identify content that may not meet certain content quality thresholds.
 
@@ -95,7 +95,7 @@ The rules are not proof that content is bad. They are signals that a human may n
 
 For more detail, see:
 
-`docs/red-flag-rules.md`
+`docs/FLAGGING_RULES.md`
 
 ### 3. Dashboard
 
@@ -107,7 +107,7 @@ The dashboard is intended for internal analysis and content review. It is not cu
 
 For more detail, see:
 
-`docs/dashboard.md`
+`docs/DASHBOARD.md`
 
 ### 4. Topic and subset analysis
 
@@ -121,7 +121,7 @@ These include:
 
 This work is limited by the current data structure and platform.
 
-More advanced search and discovery features, such as BM25 keyword search, semantic search or knowledge graphs, will likely need a more scalable technical approach.
+More advanced search and discovery features such as semantic search will likely need a more scalable technical approach.
 
 Further developments in this area will be documented in this repository.
 
@@ -135,25 +135,6 @@ This work is exploratory.
 
 Further developments in this area will be documented in this repository.
 
-### 6. Content reports
-
-DBT’s Proactive Content Management team has also developed a standalone tool that can convert CSV data from the audit tool into readable reports for content teams and senior stakeholders.
-
-Reports are designed to summarise:
-
-- the size and scope of a content dataset
-- how many items are flagged
-- common issue types
-- recommended actions
-- high-priority content items
-- possible candidates for review, removal or conversion
-
-As with the dashboard, the converter is intended for internal use, though its outputs are designed to be shared more widely. It is not currently a fully fledged digital tool or service.
-
-For more detail, see:
-
-`docs/content-reports.md`
-
 ## How the analysis works
 
 The tool uses data signals to identify content that may need attention.
@@ -162,7 +143,7 @@ Behind the scenes, the typical flow is:
 
 1. Content and metadata are collected from GOV.UK.
 2. Analytics and crawl data are joined to the content dataset.
-3. Red-flag rules are applied.
+3. Flag rules are applied.
 4. Content items receive issue flags and recommendations.
 
 From a user’s point of view, DBT content designers can:
@@ -200,11 +181,10 @@ The tool is currently an internal MVP.
 It works from start to finish and can:
 
 - bring together GOV.UK metadata, analytics and crawl data
-- apply red-flag rules
+- apply flagging rules
 - show results in a dashboard
 - export filtered CSVs
 
-A separate reporting tool also exists to convert CSV data into readable reports for stakeholders. This is less mature than the main dashboard and still needs to be productionised.
 
 The next phases of work will focus on:
 
@@ -219,7 +199,7 @@ The next phases of work will focus on:
 
 For more detail, see:
 
-`docs/roadmap.md`
+`docs/ROADMAP.md`
 
 ## Limitations
 
@@ -268,12 +248,3 @@ This is a key area for future work.
 
 Detailed documentation sits outside this overview.
 
-Recommended docs:
-
-- `docs/data-pipelines.md`
-- `docs/red-flag-rules.md`
-- `docs/dashboard.md`
-- `docs/content-reports.md`
-- `docs/decision-tracking.md`
-- `docs/limitations.md`
-- `docs/roadmap.md`
