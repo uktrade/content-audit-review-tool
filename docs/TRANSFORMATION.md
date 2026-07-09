@@ -1,7 +1,7 @@
 # Data Transformation
 
 This readme file explains how content, analytics, and crawl data are cleaned, standardised and joined together.
-This notebook DOES NOT cover data collection, which is handled through various different pipelines.
+This readme DOES NOT cover data collection, which is handled through various different pipelines.
 All functions needed for this process can be found in the `data_creation` module:
 
  ```
