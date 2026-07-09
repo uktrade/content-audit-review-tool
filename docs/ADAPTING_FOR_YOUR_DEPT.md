@@ -219,12 +219,12 @@ Departments should start with a limited implementation.
  
 Before adapting the tool, departments should confirm that they have:
  
-- a clear content scope
-- a secure environment for processing data
-- access to GOV.UK content and metadata
-- access to relevant GOV.UK GA4 data
-- access to a crawl tool or equivalent crawl data
-- people with the skills to build pipelines, analyse data and maintain the dashboard
-- content specialists who can interpret outputs
-- approval to use Streamlit or an alternative dashboard/reporting tool
-- a plan for reviewing and acting on the findings
+[ ] a clear content scope
+[ ] a secure environment for processing data
+[ ] access to GOV.UK content and metadata
+[ ] access to relevant GOV.UK GA4 data
+[ ] access to a crawl tool or equivalent crawl data
+[ ] people with the skills to build pipelines, analyse data and maintain the dashboard
+[ ] content specialists who can interpret outputs
+[ ] approval to use Streamlit or an alternative dashboard/reporting tool
+[ ] a plan for reviewing and acting on the findings
