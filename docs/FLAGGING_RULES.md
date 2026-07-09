@@ -1,13 +1,13 @@
 # Flagging Rules
 
-This
+Content and attachment pages are judged based on a set of rules that are used to flag issues on pages and make recommendations. This page is an overview of how the rules and recommendations are applied and what the rules are.
 
 ## Rules engine
 
 RuleEngine.py creates a class called MultCategoryRuleEngine that takes a datatable and a config file and outputs a set of flags and recommendations.
 Initially, this worked by using eval to parse the conditions, however this was changed to having a specific parsing engine to only allow expected behaviours.
 
-This engine reads each of the rules and interactions from the `rules.yaml` config file and parses them into filters or masks that it applies to the dataframe that it is given.
+This engine reads each of the rules and interactions from the `audit_tool_streamlit/rules.yaml` config file and parses them into filters or masks that it applies to the dataframe that it is given.
 
 #### rules
 
@@ -55,7 +55,7 @@ Interactions are the last thing to be applied, as they are designed to override 
 `apply_interactions` is the method. It loops through interactions and creates a new `recommendation` column based on these values. It uses the `pd.combine_first` method to give these recommendations priority over the default ones.
 ## Rules.yaml
 
-All rules for the recommendations can be found in the [rules config file](https://gitlab.data.trade.gov.uk/ag-data-science/regulations/content-audit-regulation-tool/-/blob/main/audit_tool_streamlit/rules.yaml?ref_type=heads).
+All rules for the recommendations can be found in the `audit_tool_streamlit/rules.yaml`
 
 #### Rules
 Rules in the config file are represented in a hierarchical structure:
@@ -88,3 +88,4 @@ Interactions are special cases, where specific combinations of flags give an ins
 Interactions follow a similar hierarchical pattern to rules. First you have the recommendation level (strong candidate for removal, moderate…), then interaction is its own sublist, listing off the names of all the flags needed to activate that interaction.
 
 Each interaction starts with `-all:` which is just a placeholder so that the lists aren’t empty.
+

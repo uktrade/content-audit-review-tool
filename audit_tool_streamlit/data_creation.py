@@ -1,30 +1,30 @@
-
 import re
 import os
 import pandas as pd
 import streamlit as st
 import numpy as np
-from dwutils import db, s3
+import *database_connection*
+import *file_read_connection*
 import audit_tool_streamlit.derived_columns as dc
 
 from audit_tool_streamlit.RuleEngine import MultiCategoryRuleEngine
 import json
 
 
-def read_csv_from_shared_folder(file_name, path="RLP/screaming_frog/", team="analysis_group_ds", **kwargs):
+def read_csv_from_shared_folder(file_name, **kwargs):
     """
-    Wrapper function for reading csv files from s3 shared folder.
+    Wrapper function for reading csv files from shared folder.
     """
     
-    with s3.read(path=os.path.join(path, file_name), team=team) as f:
+    with *file_read_connection*.read(path=file_name) as f:
         data = pd.read_csv(f, **kwargs)
     return data
 
-def read_xlsx_from_shared_folder(file_name, path="RLP/google_analytics/", team="analysis_group_ds", **kwargs):
+def read_xlsx_from_shared_folder(file_name, path=None, team="team_name", **kwargs):
     """
-    Wrapper function for reading xlsx files from s3 shared folder.
+    Wrapper function for reading xlsx files from shared folder.
     """
-    with s3.read(path=os.path.join(path, file_name), team=team) as f:
+    with *file_read_connection*.read(path=os.path.join(path, file_name), team=team) as f:
         data = pd.read_excel(f, **kwargs)
     return data
 
@@ -61,9 +61,9 @@ def deduplicate_by_grouping(data, group_col):
         .reset_index()
     )
 
-def write_to_s3(data, table_name, schema="_team_analysis_group_ds", convert_cols=None):
+def write_to_shared_folder(data, table_name, schema="team_schema", convert_cols=None):
     """
-    Wrapper function for writing DataTables to s3 shared folder as tables.
+    Wrapper function for writing DataTables to shared folder as tables.
     SQL doesn't know how to handle columns of lists or dictionaries, so we use json.dumps to convert them into strings so we 
     can convert them back upon reading
 
@@ -94,13 +94,13 @@ def write_to_s3(data, table_name, schema="_team_analysis_group_ds", convert_cols
             if_exists="replace"
         )
 
-def write_to_catalogue(df, catalogue_schema="dbt", catalogue_table_name="gov_uk_content__regulation_xd",
-                       team_name="_team_analysis_group_ds", table_name="gov_uk_audit_master", convert_cols=None, comment=None):
+def write_to_catalogue(df, catalogue_schema, catalogue_table_name,
+                       team_name, table_name, convert_cols=None, comment=None):
     """
-    Wrapper function around write_to_s3 and db.execute for writing a dataframe to a catalogue page.
+    Wrapper function around write_to_shared_folder and *database_connection*.execute for writing a dataframe to a catalogue page.
     Used only for the main joined dataset.
-    db execute moves a sql table to a catalogue page, therefore we must first write it to our shared area.
-    db execute deletes the table from the shared area when doing this.
+    *database_connection* execute moves a sql table to a catalogue page, therefore we must first write it to our shared area.
+    *database_connection* execute deletes the table from the shared area when doing this.
 
     params:
         df: pd.Dataframe
@@ -113,8 +113,8 @@ def write_to_catalogue(df, catalogue_schema="dbt", catalogue_table_name="gov_uk_
     returns:
         None
     """
-    write_to_s3(df, table_name, team_name, convert_cols)
-    db.execute(f"CALL dw_publish('{team_name}', '{table_name}', '{catalogue_schema}', '{catalogue_table_name}', '{comment}');")
+    write_to_shared_folder(df, table_name, team_name, convert_cols)
+    *database_connection*.execute(f"CALL dw_publish('{team_name}', '{table_name}', '{catalogue_schema}', '{catalogue_table_name}', '{comment}');")
     
 ################################################
 # GA
@@ -138,12 +138,12 @@ def concat_ga_data(ga_data_list, keep_columns=None):
     
 def ga_data_pipeline(write=True):
     """
-    Wrapper function that takes the raw GA files, joins them together and saves to s3 shared folder.
+    Wrapper function that takes the raw GA files, joins them together and saves to shared folder.
     """
     file_names = [
-        "CART GA4 data - Attachments V2 - non-html - April 25 - March 26.xlsx",
-        "CART HTML Attachments April 25 - March 26.xlsx",
-        "CART GA4 data April 25 - March 26.xlsx"
+        "non_html.csv",
+        "html.csv",
+        "html_attachments.csv"
     ]
 
     column_names = [
@@ -156,7 +156,7 @@ def ga_data_pipeline(write=True):
     ga_data = concat_ga_data(ga_data_list, column_names)
     ga_data = deduplicate_by_grouping(ga_data, "public_url")
     if write:
-        write_to_s3(ga_data, "gov_uk_google_analytics")
+        write_to_shared_folder(ga_data, "google_analytics")
     return data
 
 ################################################
@@ -296,7 +296,7 @@ def sf_data_pipeline(write=True):
     screaming_frog_data_df_html_int["PDF Page Count"] = screaming_frog_data_df_html_int["PDF Page Count"].replace(0, np.nan)
 
     # get public urls from the content_regulation table.
-    gov_uk_content = db.query("select distinct public_url from dbt.gov_uk_content__regulation")
+    gov_uk_content = *database_connection*.query("select distinct public_url from content__regulation")
 
     pdf_output, pdf_link_summary = prepare_screaming_frog_data(screaming_frog_data_df_pdf, screaming_frog_depth_df_pdf, gov_uk_content)
     html_ext_output, html_ext_link_summary = prepare_screaming_frog_data(screaming_frog_data_df_html_ext, screaming_frog_depth_df_html_ext, gov_uk_content)
@@ -308,7 +308,7 @@ def sf_data_pipeline(write=True):
     )
 
     if write:
-        write_to_s3(full_screaming_frog_data, "gov_uk_screaming_frog")
+        write_to_shared_folder(full_screaming_frog_data, "gov_uk_screaming_frog")
 
     return full_screaming_frog_data
 
@@ -396,9 +396,9 @@ def identify_child_content(df):
     return child_content
 
 def attachments_data_pipeline(write=True):
-    query = "select content_id::text, public_url, title, publishing_orgs, primary_publishing_org, document_type,categories, publishing_app, attachments, attachment_titles, linked_content_raw from dbt.gov_uk_content__regulation"
+    query = "select content_id::text, public_url, title, publishing_orgs, primary_publishing_org, document_type,categories, publishing_app, attachments, attachment_titles, linked_content_raw from content_table"
 
-    gov_uk_content = db.query(query)
+    gov_uk_content = *database_connection*.query(query)
 
     child_content = identify_child_content(gov_uk_content)
     
@@ -417,7 +417,7 @@ def attachments_data_pipeline(write=True):
 
     child_content["is_attachment"] = True
     if write:
-        write_to_s3(child_content, "gov_uk_attachments", convert_cols=["publishing_orgs", "categories"])
+        write_to_shared_folder(child_content, "gov_uk_attachments", convert_cols=["publishing_orgs", "categories"])
 
     return child_content
 
@@ -456,13 +456,13 @@ def get_pdf_text_lookup():
     We could consider saving this as a sql table so we do not need to repeat this conversion everytime we update the content table
     
     """
-    with s3.read(path="RLP/screaming_frog/pdf/Pdf_full_text_dataframe.csv", team="analysis_group_ds") as f:
+    with *file_read_connection*.read(path="pdf_full_text_dataframe.csv", team="team_name") as f:
         pdf_text_df = pd.read_csv(f)
 
     pdf_text_df = pdf_text_df.set_index("pdf_url").drop(columns=["pdf_text", "Unnamed: 0"]).dropna()
     
-    query = "select distinct(public_url) from dbt.gov_uk_content__attachment_urls where file_extension = 'pdf'"
-    pdf_attachment_data = db.query(query)
+    query = "select distinct(public_url) from attachment_urls where file_extension = 'pdf'"
+    pdf_attachment_data = *database_connection*.query(query)
 
     # pdf url is badly formatted. Apply the same formatting to public url so we can match it
     pdf_attachment_data["matching_url"] = pdf_attachment_data["public_url"].copy()
@@ -486,10 +486,10 @@ def fill_na_from_parent(df,column, id_column="public_url", parent_id_column="par
     return data[column]
     #data.loc[:, "categories"] = data["categories"].apply(lambda x: x if isinstance(x, list) else [])
 
-def create_full_data(content_table="dbt.gov_uk_content__regulation", 
-                     attachments_table="_team_analysis_group_ds.gov_uk_attachments", 
-                     ga_table="_team_analysis_group_ds.gov_uk_google_analytics", 
-                     sf_table="_team_analysis_group_ds.gov_uk_screaming_frog",
+def create_full_data(content_table,
+                     attachments_table,
+                     ga_table,
+                     sf_table,
                      rules_config="rules.yaml",
                      max_text_length=10000):
 
@@ -505,7 +505,7 @@ def create_full_data(content_table="dbt.gov_uk_content__regulation",
         Uses tf-idf to derive the html equivalent for pdf pages
         Uses rules.yaml to make recommendations
 
-    this function returns a dataframe so you can run it for testing without needing to save it to s3 or catalogue
+    this function returns a dataframe so you can run it for testing without needing to save it to shared_folder or catalogue
     """
     # this query is for attachments that do not have a content_id, and therefore must inherit some
     # attributes from their parent
@@ -557,8 +557,8 @@ def create_full_data(content_table="dbt.gov_uk_content__regulation",
           gov_uk_content.public_url = attachments.public_url
     """
 
-    attachment_data = db.query(attachment_query)
-    content_data = db.query(content_query)
+    attachment_data = *database_connection*.query(attachment_query)
+    content_data = *database_connection*.query(content_query)
 
     list_cols = ["publishing_orgs", "categories"]
 
@@ -733,6 +733,5 @@ if __name__ == "__main__":
     if update_content:
         data = create_full_data()
         if save_new_content:
-            write_to_catalogue(data, "dbt", "gov_uk_content__regulation_xd",
+            write_to_catalogue(data, "schema_name", "table_name",
                                convert_cols=["publishing_orgs", "categories", 'freshness_reasons', 'user_relevance_reasons', 'usability_reasons'])
-        

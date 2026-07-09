@@ -4,7 +4,8 @@ import re
 import pandas as pd
 import streamlit as st
 import numpy as np
-from dwutils import db, s3
+import *database_connection*
+
 
 class parameter_index_generator:
     def __init__(self, label="p_"):
@@ -22,7 +23,7 @@ class parameter_index_generator:
 
 
 def create_column_definition_text():
-    d = db.query("select column_name, definition from public.dataworkspace__data_dictionaries where table_name = 'dbt.gov_uk_content__regulation_xd'")
+    d = *database_connection*.query("select column_name, definition from data_dictionaries where table_name = 'table_name'")
     # capitalise column name
     d.loc[:, "column_name"] = d["column_name"].apply(lambda row: row.replace("_", " ").title())
     d[['definition', 'source']] = d['definition'].str.split("\n", n=1, expand=True)
@@ -60,8 +61,7 @@ def load_data_with_filters(current_filters=None, method="all", columns="*"):
     if isinstance(columns, list):
         columns = ", ".join(columns)
 
-    query = f"select {columns} from dbt.gov_uk_content__regulation_xd"
-   #query = f"select {columns} from _team_analysis_group_ds.gov_uk_audit_master"
+    query = f"select {columns} from table_name"
 
     all_criteria = []
     all_parameters = {}
@@ -151,7 +151,7 @@ def load_data_with_filters(current_filters=None, method="all", columns="*"):
     
             query = f"{query} WHERE {where_conds}"
 
-    all_data = db.query(query, params=all_parameters)
+    all_data = *database_connection*.query(query, params=all_parameters)
 
     date_columns = [
         # "non_html_last_modified",
