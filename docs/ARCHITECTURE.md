@@ -18,8 +18,8 @@ flowchart TD
     H([Downloadable CSV file])
 
     %% Note about URLs
-    A -.URLs from content pipeline are used to<br/>determine which GA and SF data to collect.-> B
-    A -.-> C
+    A -.URLs from content pipeline are used to<br/>determine which GA data to collect.-> B
+    A -.URLs from content pipeline are used to<br/>determine SF data to collect.-> C
 
     B --> E
     C --> E
@@ -32,3 +32,4 @@ flowchart TD
     E --> F
     F --> G
     G --> H
+```
