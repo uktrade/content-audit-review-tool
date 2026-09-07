@@ -4,7 +4,7 @@ Download this checklist from [GitHub](https://github.com/uktrade/platform-docume
 
 Work through the checklist from top to bottom, ticking each item once you have confirmed it is true. Each item links to detailed guidance available in the [Code Repository Hardening guidelines](https://platform.readme.trade.gov.uk/managed/features/code-repository-hardening/).
 
-Last updated: _add date_
+Last updated: 07/09/2026
 
 ## 1. Contributor controls
 
