@@ -62,7 +62,7 @@ Some minor cleaning is performed, such as converting list and date columns to th
 
 The dashboard's main panel starts with a `st.dataframe` that shows a preview of the top 100 rows under the current filters. There is an option here to download the data as a CSV file. Since streamlit download buttons require the data to already be converted to a CSV (taking up valuable time and space) we use a "prepare download" button to make sure that the CSV is only generated if required.
 
-### Visualisations.
+### Visualisations
 
 The dashboard's various visualisations are created by functions in the `data_visualisation.py` script. These visualisations are stored in the session space and only regenerated when the filters are updated.
 
