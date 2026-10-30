@@ -55,11 +55,13 @@ Both start as `[]` for every row. For each rule, rows matching its `CombinedCond
 4. **Category scores.** `accessibility_score`, `functionality_score` and `negative_user_engagement_score` are `_flag_score(...)`: for each row, sum `base_score[strength]` (from the YAML `base_score` map) over every strength in that category's `_flag` list. `freshness_score` is the exception — it is **not** derived from `base_score`/`freshness_flag` at all. It's `freshness_age_score`, a continuous piecewise-linear function of content age in years (from `public_updated_at`, falling back to `pdf_modified`), interpolated between `FRESHNESS_ANCHORS` (`0yrs→0, 3yrs→1, 5yrs→2, 10yrs→3`, capped at 3 beyond 10 years). `freshness_flag`/`freshness_reasons` are still used for the human-readable reason text. Rows flagged by the `exclusions` category (data-quality exclusions, e.g. Publisher/HMRC-manuals-api content) have `freshness_score` forced to 0.
 
 5. **Base score and recommendation.** `base_score` = accessibility + functionality + negative_user_engagement + freshness scores.
-   - `base_score == 0` → `"No action"`
+   Checked in this order, first match wins (`get_recommendation`):
+   - `withdrawn` → `"Remove"`
+   - `base_score < 1` → `"No action"` (note: below 1, not just 0, so a small freshness score alone doesn't trigger a review)
    - `demand == "No Demand"` and `freshness_score >= 3` → `"Remove"`
    - otherwise → `"Review"`
 
-   `withdrawn` content is scored on its own route regardless of the above: `base_score` is forced to `1`, `recommendation` is forced to `"Remove"`, and `recommend_transfer_to_tna` is set `True`.
+   Withdrawn content is also scored on its own route: `base_score` is then forced to `1` and `recommend_transfer_to_tna` is set `True`.
 
 6. **Normalisation.** Each row's `base_score` is normalised against the maximum score achievable by its ranking population (`MAX_BASE_SCORE_HTML_PAR`/`_HTML_ATT`/`_NON_HTML`, derived from the maximum possible per-category scores in `base_score`) to give `normalized_score` (0–100). `adjusted_score = demand_multiplier * normalized_score` — this is the primary sort key used to prioritise the audit.
 

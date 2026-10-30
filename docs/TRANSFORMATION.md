@@ -40,11 +40,20 @@ This dataframe contains information about the traversal screaming frog did to co
 This dataframe includes all the data that SF collects about each page.The processing of screaming frog data is more complicated than the google analytics data, mainly because SF only gives data at the page level, however we want to aggregate the data at the parent level.The following steps are performed separately for each pair of tables in each category:
 
 ### Data processing
-The first step is to deduplicate the data, as each page is traversed multiple times. The `depth_df` is deduplicated on the subset of the `From` and `To` columns, as we are only interested in unique parent/attachment relationships. The `data_df` is deduplicated by grouping by the url, and taking the mode or most common value for each column.
+The first step is to deduplicate the data, as each page is traversed multiple times. The `depth_df` is deduplicated on the subset of the `From` and `To` columns, as we are only interested in unique parent/attachment relationships. The `data_df` is deduplicated by grouping by the url, and taking the mode or most common value for each column. 
+
+The `data_df` is read with `usecols` set to `SF_DATA_KEEP_COLS`, so only the columns we need are loaded, and with explicit dtypes (`SF_DATA_DTYPES`) and date columns (`SF_DATA_DATE_COLS`) so that each kept column has a consistent type regardless of which csv it came from:
+
+| Column | dtype |
+|---|---|
+| Address, Title 1, Readability, Redirect Type | `str` |
+| Word Count, Sentence Count, PDF Page Count, Status Code | `Int64` (nullable integer) |
+| Average Words Per Sentence, Flesch Reading Ease Score | `float64` |
+| PDF Created, PDF Modified | `datetime64` (via `parse_dates`) |
 
 The depth_df and data_df are then merged on the `To` and `Address` columns. This associates each row in `data_df` with the `From` column in `depth_df` so that we know the parent url of each atttachment. this is a many-to-one relationship, as each attachment page may have more than one parent url (different content pages can have the same attachment).
 
-This merged dataset is then merged with the content data on the `From` and `public_url` columns, and `public_url` is renamed to `parent_public_url`, and `Address` is renamed to `public_url`. This is done in order to make sure that the only parent urls we are intested in are the ones that are in the content data.
+`From` is then renamed to `parent_public_url`, and `Address` is renamed to `public_url`. The SF data is no longer joined to the content data at this stage (so no `content_id` is attached to the parent here); filtering to URLs that exist in the content data is done through the optional `url_list` argument of `prepare_screaming_frog_data`, and the join to the content data happens later when the master dataset is created.
 
 At this point, additional metrics are derived from the SF data. we define is_broken as any page that returned a status code of `404`, and is_redirecting as any page that has a Redirect Type using the following code:
 ```
@@ -132,7 +141,7 @@ And a grouping ID is created (this is the parent_id for attachments and otherwis
         by=["grouping_id", "is_parent"], ascending=[True, False]
     )
 ```
-Pdf text is joined to the dataset using  `get_pdf_text_lookup()`, and the max text length is capped at `10,000` (longer texts are truncated).
+Pdf text is joined to the dataset using  `get_pdf_text_lookup()`. This reads `RLP/screaming_frog/pdf/pdf_full_text_dataframe.csv` (indexed by its `url` column), matches each attachment's url to a text file under `pdf_texts/`, and returns the cleaned text as `pdf_clean`. This is used to fill any missing `text` values, the number of matched rows is printed, and `pdf_clean` is then dropped. The max text length is capped at `10,000` (longer texts are truncated).
 
 Some fields are derived like `heading_count` (calculated using regex to find header tags in the raw html for each content page) and `word_to_heading_ratio` (simply the word count from screaming frod divided by the number of headers or divided by 1 if the number of headings is 0)
 
