@@ -47,8 +47,9 @@ rules:
         - is_broken == true
       3 or more broken links:
         - n_broken_links >= 3
-      2 broken links, over half of links on page broken:
-        - n_broken_links == 2
+        - broken_link_ratio <= 0.5
+      2 or more broken links and over half of links on page broken:
+        - n_broken_links >= 2
         - broken_link_ratio > 0.5
     high (higher):
       2 broken links:
@@ -124,8 +125,7 @@ rules:
       # all non-HTML content issues are derived from Screaming Frog atm, so
       # missing public_updated_at / engagement_time_secs isn't checked for those
       Incomplete audit data:
-        html_no_screaming_frog:
-          - file_extension == "html"
+        no_screaming_frog:
           - screaming_frog_available == False
         html_no_updated_at:
           - file_extension == "html"
@@ -133,8 +133,7 @@ rules:
         html_no_engagement:
           - file_extension == "html"
           - engagement_time_secs IS NULL
-        non_html_no_screaming_frog:
-          - file_extension != "html"
-          - screaming_frog_available == False
       Withdrawn content:
         - withdrawn == True
+      Missing demand data:
+        - sessions IS NULL

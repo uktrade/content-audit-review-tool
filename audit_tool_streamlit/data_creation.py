@@ -1,36 +1,35 @@
 import json
 import os
 import re
+from itertools import chain
 
 import numpy as np
 import pandas as pd
-# placeholders for our real system
-import *database_connection*
-import *file_read_connection*
+from dwutils import db, s3
 
 import audit_tool_streamlit.derived_columns as dc
 from audit_tool_streamlit.RuleEngine import MultiCategoryRuleEngine
 
 
 def read_csv_from_shared_folder(
-    file_name,  path=None, team="team_name", **kwargs
+    file_name, path="path/to/crawl_data/", team="example_team", **kwargs
 ):
     """
-    Wrapper function for reading csv files from *file_read_connection* shared folder.
+    Wrapper function for reading csv files from s3 shared folder.
     """
 
-    with *file_read_connection*.read(path=os.path.join(path, file_name), team=team) as f:
+    with s3.read(path=os.path.join(path, file_name), team=team) as f:
         data = pd.read_csv(f, **kwargs)
     return data
 
 
 def read_xlsx_from_shared_folder(
-    file_name,  path=None, team="team_name", **kwargs
+    file_name, path="path/to/ga_data/", team="example_team", **kwargs
 ):
     """
-    Wrapper function for reading xlsx files from *file_read_connection* shared folder.
+    Wrapper function for reading xlsx files from s3 shared folder.
     """
-    with *file_read_connection*.read(path=os.path.join(path, file_name), team=team) as f:
+    with s3.read(path=os.path.join(path, file_name), team=team) as f:
         data = pd.read_excel(f, **kwargs)
     return data
 
@@ -56,18 +55,23 @@ def deduplicate_by_grouping(data, group_col):
     """
     Screaming frog data has duplicates with slightly different values.
     We group by public_url and take the most common (mode) value in each column.
+    Before this, 404 rows are dropped for any address that also has a 200 row (the 404 rows
+    have no data and would otherwise win the mode). Addresses with no 200 row keep their 404s.
     params:
         data: pd.DataFrame
         group_col: string. The column you want to group on
     returns:
         pd.DataFrame
     """
+    status = pd.to_numeric(data["Status Code"], errors="coerce")
+    has_200 = (status == 200).groupby(data[group_col]).transform("any")
+    data = data[~((status == 404) & has_200)]
     return data.groupby(group_col).agg(lambda col: safe_mode(col)).reset_index()
 
 
-def write_to_*file_read_connection*(data, table_name, schema="team_schema", convert_cols=None):
+def write_to_s3(data, table_name, schema="example_shared_schema", convert_cols=None):
     """
-    Wrapper function for writing DataTables to *file_read_connection* shared folder as tables.
+    Wrapper function for writing DataTables to s3 shared folder as tables.
     SQL doesn't know how to handle columns of lists or dictionaries, so we use json.dumps to convert them into strings so we
     can convert them back upon reading
 
@@ -82,7 +86,7 @@ def write_to_*file_read_connection*(data, table_name, schema="team_schema", conv
     import sqlalchemy
     from sqlalchemy.engine.base import Engine
 
-    engine: Engine = sqlalchemy.create_engine("postgresql://")
+    engine: Engine = sqlalchemy.create_engine("dialect://")
 
     if convert_cols is not None:
         for col in convert_cols:
@@ -96,18 +100,18 @@ def write_to_*file_read_connection*(data, table_name, schema="team_schema", conv
 
 def write_to_catalogue(
     df,
-    catalogue_schema,
-    catalogue_table_name,
-    team_name,
-    table_name,
+    catalogue_schema="example_catalogue_schema",
+    catalogue_table_name="example_content_table",
+    team_name="example_shared_schema",
+    table_name="example_master_table",
     convert_cols=None,
     comment=None,
 ):
     """
-    Wrapper function around write_to_*file_read_connection* and *database_connection*.execute for writing a dataframe to a catalogue page.
+    Wrapper function around write_to_s3 and db.execute for writing a dataframe to a catalogue page.
     Used only for the main joined dataset.
-    *database_connection* execute moves a sql table to a catalogue page, therefore we must first write it to our shared area.
-    *database_connection* execute deletes the table from the shared area when doing this.
+    db execute moves a sql table to a catalogue page, therefore we must first write it to our shared area.
+    db execute deletes the table from the shared area when doing this.
 
     params:
         df: pd.Dataframe
@@ -120,9 +124,9 @@ def write_to_catalogue(
     returns:
         None
     """
-    write_to_*file_read_connection*(df, table_name, team_name, convert_cols)
-    *database_connection*.execute(
-        f"CALL dw_publish('{team_name}', '{table_name}', '{catalogue_schema}', '{catalogue_table_name}', '{comment}');"
+    write_to_s3(df, table_name, team_name, convert_cols)
+    db.execute(
+        f"CALL publish_procedure('{team_name}', '{table_name}', '{catalogue_schema}', '{catalogue_table_name}', '{comment}');"
     )
 
 
@@ -153,39 +157,37 @@ def concat_ga_data(ga_data_list, keep_columns=None):
 
 def ga_data_pipeline(write=True):
     """
-    Wrapper function that takes the raw GA files, joins them together and saves to *file_read_connection* shared folder.
+    Wrapper function that takes the raw GA files, joins them together and saves to s3 shared folder.
     """
+    print("ga_data_pipeline: starting")
     file_names = [
-        "non_html.csv",
-        "html.csv",
-        "html_attachments.csv"
+        "CART non html attachments combined.xlsx",
+        "CART html attachments combined.xlsx",
+        "CART pages output combined.xlsx",
     ]
 
     column_names = [
         "public_url",
         "sessions",
+        "engaged_sessions",
         "users",
-        "new_users",
-        "returning_users",
         "engagement_time_secs",
         "total_file_downloads",
-        "users_file_download",
-        "content_clicks",
-        "video_views_complete",
-        "total_outbound_clicks",
-        "total_internal_clicks",
-        "entrances",
-        "exits",
         "file_downloads",
         "navigation",
     ]
 
+    print(f"ga_data_pipeline: reading {len(file_names)} GA files")
     ga_data_list = read_ga_files(file_names)
+    print("ga_data_pipeline: concatenating GA files")
     ga_data = concat_ga_data(ga_data_list, column_names)
+    print("ga_data_pipeline: deduplicating by public_url")
     ga_data = deduplicate_by_grouping(ga_data, "public_url")
     if write:
-        write_to_*file_read_connection*(ga_data, "google_analytics")
-    return data
+        print("ga_data_pipeline: writing to s3")
+        write_to_s3(ga_data, "example_ga_table")
+    print("ga_data_pipeline: done")
+    return ga_data
 
 
 ################################################
@@ -193,34 +195,28 @@ def ga_data_pipeline(write=True):
 ################################################
 
 
-def prepare_screaming_frog_data(screaming_frog_df, depth_df, content_df, url_list=None):
+def prepare_screaming_frog_data(screaming_frog_df, depth_df, url_list=None):
     """
     Function takes the Screaming Frog output and joins it to the content data
     params:
         screaming_frog_df: pd.DataFrame - the URL level data from screaming frog. Contains columns like "Word Count" and "average_words_per_sentence"
         depth_df: pd.DataFrame - A dataframe that with "From" and "To" columns that show the traversal SF took to find the pages. Used to connect SF data to parent pages.
-        content_df: pd.DataFrame - the content_id and public_url columns from the gov.uk content dataframe. Used to connect both the url and the parent url to their content_ids if applicable
         url_list: list - a list of urls in the gov.uk content dataframe and its attachments. Filter the results to only include these URLs which we have other data for.
     """
+    print(f"prepare_screaming_frog_data: starting with {len(screaming_frog_df)} rows")
 
-    screaming_frog_df_deduped = deduplicate_by_grouping(screaming_frog_df, "Address")
-    depth_df_deduped = depth_df.drop_duplicates(subset=["From", "To"])
     # join the depth_df to get a parent relationship (left join because not all results have one)
-    sf_df = screaming_frog_df_deduped.merge(
-        depth_df_deduped[["From", "To"]],
+    sf_df = screaming_frog_df.merge(
+        depth_df[["From", "To"]],
         left_on="Address",
         right_on="To",
         how="left",
         validate="1:m",
     )
+    print("prepare_screaming_frog_data: joined depth data")
 
-    # join the content_df to the "From" column to get content_id and public_url for the parent url
-    sf_df = sf_df.merge(
-        content_df, left_on="From", right_on="public_url", how="left", validate="m:1"
-    ).rename(columns={"public_url": "parent_public_url"})
-
-    # join the content_df to the "From" column to get content_id
-    sf_df = sf_df.rename(columns={"Address": "public_url"})
+    sf_df = sf_df.rename(columns={"From": "parent_public_url", "Address": "public_url"})
+    print("prepare_screaming_frog_data: joined content data for parent urls")
 
     # we can have duplicates here, where an Address was associated with multiple parent URLs that were not in the content df, so they all show up as NA
     # drop these dupes
@@ -229,14 +225,17 @@ def prepare_screaming_frog_data(screaming_frog_df, depth_df, content_df, url_lis
     # derive metrics
     sf_df["is_broken"] = sf_df["Status Code"] == 404
     sf_df["is_redirecting"] = ~sf_df["Redirect Type"].isna()
+    print("prepare_screaming_frog_data: derived is_broken and is_redirecting")
 
-
-    
-    broken_redirect_summary_df = sf_df.groupby("parent_public_url").agg(
-    n_links=('parent_public_url', 'size'),
-    n_broken_links=('is_broken', 'sum'),
-    n_redirecting_links=('is_redirecting', 'sum')
-    ).reset_index()
+    broken_redirect_summary_df = (
+        sf_df.groupby("parent_public_url")
+        .agg(
+            n_links=("parent_public_url", "size"),
+            n_broken_links=("is_broken", "sum"),
+            n_redirecting_links=("is_redirecting", "sum"),
+        )
+        .reset_index()
+    )
 
     broken_urls_df = (
         sf_df[sf_df["is_broken"]]
@@ -247,12 +246,11 @@ def prepare_screaming_frog_data(screaming_frog_df, depth_df, content_df, url_lis
     broken_redirect_summary_df = broken_redirect_summary_df.merge(
         broken_urls_df, on="parent_public_url", how="left"
     )
-    broken_redirect_summary_df["broken_urls"] = broken_redirect_summary_df["broken_urls"].apply(
-        lambda x: x if isinstance(x, list) else []
-    )
+    broken_redirect_summary_df["broken_urls"] = broken_redirect_summary_df[
+        "broken_urls"
+    ].apply(lambda x: x if isinstance(x, list) else [])
+    print("prepare_screaming_frog_data: built broken/redirect summary")
 
-    # join the summary df to the data. We join on the content id, so because we want this to be directly associated with the content row for each parent url.
-    # sf_df = sf_df.merge(broken_redirect_summary_df, left_on = "public_url", right_on="parent_public_url", how="left", suffixes=("", "_r"), validate="m:1")
     # we are DONE with parent_url, so can drop it and deduplicate by public_url to remove duplicates caused by multiple parent urls
     sf_df = sf_df.drop(columns=["parent_public_url"]).drop_duplicates("public_url")
 
@@ -262,6 +260,7 @@ def prepare_screaming_frog_data(screaming_frog_df, depth_df, content_df, url_lis
 
     # we can have duplicates here, where an Address was associated with multiple parent URLs that were not in the content df, so they all show up as NA
     # drop these dupes
+    print(f"prepare_screaming_frog_data: done ({len(sf_df)} rows)")
     return sf_df.reset_index(drop=True), broken_redirect_summary_df
 
 
@@ -269,18 +268,26 @@ def combine_data(output_dfs, link_summary_dfs):
     """
     Concatenates the SF data together and
     """
+    print(f"combine_data: starting, combining {len(output_dfs)} dataframes")
 
     assert len(output_dfs) == len(link_summary_dfs)
 
     # get the total number of links across all summary dfs
     # these are from different sources, so adding is fine, as they cannot be the same links in both!
+
     link_summary_df = (
         pd.concat(link_summary_dfs)
         .groupby("parent_public_url")
-        .agg({"n_links": sum, "n_broken_links": sum, "n_redirecting_links": sum})
+        .agg(
+            n_links=("n_links", "sum"),
+            n_broken_links=("n_broken_links", "sum"),
+            n_redirecting_links=("n_redirecting_links", "sum"),
+            broken_urls=("broken_urls", lambda x: list(set(chain.from_iterable(x)))),
+        )
         .reset_index()
         .rename(columns={"parent_public_url": "public_url"})
     )
+    print("combine_data: built combined link summary")
 
     output_df = pd.concat(output_dfs)
 
@@ -311,17 +318,22 @@ def combine_data(output_dfs, link_summary_dfs):
     output_df = output_df[keep_cols]
 
     output_df = output_df.drop_duplicates(subset="public_url")
+    print(f"combine_data: deduplicated output data ({len(output_df)} rows)")
 
     # and merge the lists of parent info back on
     output_df = output_df.merge(
         link_summary_df, how="left", on="public_url", validate="1:1"
     )
-
+    # pages with no link summary get a float NaN from the left merge, which json.dumps writes as the string "NaN"
+    output_df["broken_urls"] = output_df["broken_urls"].apply(
+        lambda x: x if isinstance(x, list) else []
+    )
     output_df["screaming_frog_available"] = True
     date_columns = ["pdf_modified", "pdf_created"]
     for col in date_columns:
         output_df[col] = pd.to_datetime(output_df[col], errors="coerce")
 
+    print("combine_data: done")
     return output_df
 
 
@@ -329,44 +341,114 @@ def sf_data_pipeline(write=True):
     """
     Hardcoding all the nonsense required to read each of these messy csvs
     """
+    print("sf_data_pipeline: starting")
+
+    SF_DATA_KEEP_COLS = [
+        "Address",
+        "Title 1",
+        "Word Count",
+        "Sentence Count",
+        "Average Words Per Sentence",
+        "Flesch Reading Ease Score",
+        "Readability",
+        "PDF Modified",
+        "PDF Created",
+        "PDF Page Count",
+        "Status Code",
+        "Redirect Type",
+    ]
+    SF_DATA_DTYPES = {
+        "Address": str,
+        "Title 1": str,
+        "Word Count": "Int64",
+        "Sentence Count": "Int64",
+        "Average Words Per Sentence": "float64",
+        "Flesch Reading Ease Score": "float64",
+        "Readability": str,
+        "PDF Page Count": "Int64",
+        "Status Code": "Int64",
+        "Redirect Type": str,
+    }
+    SF_DATA_DATE_COLS = ["PDF Modified", "PDF Created"]
+
     # external html
+    print("sf_data_pipeline: reading external html files")
+
+    print("sf_data_pipeline: reading depth df")
     screaming_frog_depth_df_html_ext = read_csv_from_shared_folder(
         file_name="html_external/all_html.csv", dtype={"Alt Text": str}
     )
+
+    print("sf_data_pipeline: deduplicating")
+    screaming_frog_depth_df_html_ext = screaming_frog_depth_df_html_ext.drop_duplicates(
+        subset=["From", "To"]
+    )
+
+    print("sf_data_pipeline: reading data df")
     screaming_frog_data_df_html_ext = read_csv_from_shared_folder(
         file_name="html_external/Html_ext_data.csv",
-        dtype={"Meta Keywords 3": str, "Meta Robots 3": str},
-        parse_dates=["Last Modified", "PDF Created", "PDF Modified"],
+        usecols=SF_DATA_KEEP_COLS,
+        dtype=SF_DATA_DTYPES,
+        parse_dates=SF_DATA_DATE_COLS,
+        lineterminator="\n",
     )
+
+    print("sf_data_pipeline: deduplicating")
+    screaming_frog_data_df_html_ext = deduplicate_by_grouping(
+        screaming_frog_data_df_html_ext, "Address"
+    )
+
     # internal html
+    print("sf_data_pipeline: reading internal html files")
+    print("sf_data_pipeline: reading depth df")
     screaming_frog_depth_df_html_int = read_csv_from_shared_folder(
         file_name="html_internal/all_int_html.csv",
         dtype={"Alt Text": str, "Target": str, "Rel": str},
     )
+
+    print("sf_data_pipeline: deduplicating")
+    screaming_frog_depth_df_html_int = screaming_frog_depth_df_html_int.drop_duplicates(
+        subset=["From", "To"]
+    )
+
+    print("sf_data_pipeline: reading data df")
     screaming_frog_data_df_html_int = read_csv_from_shared_folder(
         file_name="html_internal/html_int_data.csv",
-        dtype={"Meta Keywords 3": str, "Meta Robots 3": str},
-        parse_dates=["Last Modified", "PDF Created", "PDF Modified"],
+        usecols=SF_DATA_KEEP_COLS,
+        dtype=SF_DATA_DTYPES,
+        parse_dates=SF_DATA_DATE_COLS,
+        lineterminator="\n",
     )
-    # html internal data was saved with an index so it has an extra column to be dropped
-    screaming_frog_depth_df_html_int = screaming_frog_depth_df_html_int.drop(
-        ["Unnamed: 0"], axis=1
+
+    print("sf_data_pipeline: deduplicating")
+    screaming_frog_data_df_html_int = deduplicate_by_grouping(
+        screaming_frog_data_df_html_int, "Address"
     )
+
     # pdf
+    print("sf_data_pipeline: reading pdf files")
+    print("sf_data_pipeline: reading depth df")
     screaming_frog_depth_df_pdf = read_csv_from_shared_folder(
         file_name="pdf/all_pdfs.csv"
     )
 
+    print("sf_data_pipeline: deduplicating")
+    screaming_frog_depth_df_pdf = screaming_frog_depth_df_pdf.drop_duplicates(
+        subset=["From", "To"]
+    )
+
+    print("sf_data_pipeline: reading data df")
     screaming_frog_data_df_pdf = read_csv_from_shared_folder(
         file_name="pdf/all_pdfs_data.csv",
-        dtype={
-            "Indexability Status": str,
-            "X-Robots-Tag 1": str,
-            "Hash": str,
-            "Redirect URL": str,
-            "Redirect Type": str,
-        },
-        parse_dates=["Last Modified", "PDF Created", "PDF Modified"],
+        usecols=SF_DATA_KEEP_COLS,
+        dtype=SF_DATA_DTYPES,
+        parse_dates=SF_DATA_DATE_COLS,
+        lineterminator="\n",
+    )
+
+    print("sf_data_pipeline: deduplicating")
+    screaming_frog_data_df_pdf = deduplicate_by_grouping(
+        screaming_frog_data_df_pdf, "Address"
     )
 
     # html data should never have a pdf page count but sometimes it's 0 instead of missing.
@@ -377,25 +459,20 @@ def sf_data_pipeline(write=True):
         "PDF Page Count"
     ].replace(0, np.nan)
 
-    # get public urls from the content_regulation table.
-    gov_uk_content = *database_connection*.query(
-        "select distinct public_url from content__regulation"
-    )
-
+    print("sf_data_pipeline: preparing pdf data")
     pdf_output, pdf_link_summary = prepare_screaming_frog_data(
-        screaming_frog_data_df_pdf, screaming_frog_depth_df_pdf, gov_uk_content
+        screaming_frog_data_df_pdf, screaming_frog_depth_df_pdf
     )
+    print("sf_data_pipeline: preparing external html data")
     html_ext_output, html_ext_link_summary = prepare_screaming_frog_data(
-        screaming_frog_data_df_html_ext,
-        screaming_frog_depth_df_html_ext,
-        gov_uk_content,
+        screaming_frog_data_df_html_ext, screaming_frog_depth_df_html_ext
     )
+    print("sf_data_pipeline: preparing internal html data")
     html_int_output, html_int_link_summary = prepare_screaming_frog_data(
-        screaming_frog_data_df_html_int,
-        screaming_frog_depth_df_html_int,
-        gov_uk_content,
+        screaming_frog_data_df_html_int, screaming_frog_depth_df_html_int
     )
 
+    print("sf_data_pipeline: combining all screaming frog data")
     full_screaming_frog_data = combine_data(
         output_dfs=[pdf_output, html_ext_output, html_int_output],
         link_summary_dfs=[
@@ -406,8 +483,14 @@ def sf_data_pipeline(write=True):
     )
 
     if write:
-        write_to_*file_read_connection*(full_screaming_frog_data, "gov_uk_screaming_frog")
+        print("sf_data_pipeline: writing to s3")
+        write_to_s3(
+            full_screaming_frog_data,
+            "example_crawl_table",
+            convert_cols=["broken_urls"],
+        )
 
+    print("sf_data_pipeline: done")
     return full_screaming_frog_data
 
 
@@ -428,6 +511,7 @@ def identify_child_content(df):
     content id and public url in the main dataset. This function returns a subset of the child pages, along with their relevant
     parent content id and public url
     """
+    print(f"identify_child_content: starting with {len(df)} rows")
 
     df["attachment_titles"] = df["attachment_titles"].apply(
         lambda x: x if isinstance(x, list) else []
@@ -466,6 +550,7 @@ def identify_child_content(df):
         .str.split(".")
         .apply(lambda x: x[-1].lower() if is_extension(x[-1]) else "html")
     )
+    print(f"identify_child_content: exploded attachments ({len(atmt_df)} rows)")
 
     linked_content = (
         df.explode("linked_content_raw")
@@ -484,6 +569,9 @@ def identify_child_content(df):
 
     urls_df = linked_content[is_url]
     cids_df = linked_content[~is_url]
+    print(
+        f"identify_child_content: exploded linked content ({len(linked_content)} rows)"
+    )
 
     urls_df["public_url"] = urls_df["linked_content_raw"].str.replace(
         "^/", "https://www.gov.uk/", regex=True
@@ -492,17 +580,46 @@ def identify_child_content(df):
 
     cids_df = cids_df.rename(columns={"linked_content_raw": "content_id"})
     cids_df["content_id"] = cids_df["content_id"]
-    
-    joining_df = df.drop(columns=["linked_content_raw", "attachments", "attachment_titles"])
 
-    joining_df = joining_df.sort_values("public_updated_at", ascending=False).drop_duplicates(subset=["public_url"], keep="first").drop(columns="public_updated_at")
+    joining_df = df.drop(
+        columns=["linked_content_raw", "attachments", "attachment_titles"]
+    )
 
-    
-    cids_child = cids_df.merge(joining_df, how="left", on="content_id", validate="m:1", suffixes=["_parent", None])
-    urls_child = urls_df.merge(joining_df, how="left", on="public_url", validate="m:1", suffixes=["_parent", None])
-    atmt_child = atmt_df.merge(joining_df, how="left", on="public_url", validate="m:1", suffixes=["_parent", None])
-    
-    child_content = pd.concat([urls_child, cids_child, atmt_child]).drop_duplicates(subset=["public_url", "parent_public_url"]).dropna(subset="public_url").drop(columns="public_updated_at")
+    joining_df = (
+        joining_df.sort_values("public_updated_at", ascending=False)
+        .drop_duplicates(subset=["public_url"], keep="first")
+        .drop(columns="public_updated_at")
+    )
+
+    print("identify_child_content: joining child content to parent data")
+    cids_child = cids_df.merge(
+        joining_df,
+        how="left",
+        on="content_id",
+        validate="m:1",
+        suffixes=["_parent", None],
+    )
+    urls_child = urls_df.merge(
+        joining_df,
+        how="left",
+        on="public_url",
+        validate="m:1",
+        suffixes=["_parent", None],
+    )
+    atmt_child = atmt_df.merge(
+        joining_df,
+        how="left",
+        on="public_url",
+        validate="m:1",
+        suffixes=["_parent", None],
+    )
+
+    child_content = (
+        pd.concat([urls_child, cids_child, atmt_child])
+        .drop_duplicates(subset=["public_url", "parent_public_url"])
+        .dropna(subset="public_url")
+        .drop(columns="public_updated_at")
+    )
     # if attachment_titles exists, this should have priority over the parent title
     child_content["title"] = child_content["title"].fillna(
         child_content["attachment_titles"]
@@ -519,6 +636,7 @@ def identify_child_content(df):
         .eq(0)
     ] = np.nan
 
+    print("identify_child_content: filling missing values from parent columns")
     for parent_col in parent_cols:
         col = parent_col.replace("_parent", "")
         child_content[col] = child_content[col].fillna(child_content[parent_col])
@@ -526,14 +644,22 @@ def identify_child_content(df):
     child_content = child_content.drop(columns=parent_cols)
 
     # group by content_id and merge parents
+    print(f"identify_child_content: done ({len(child_content)} rows)")
     return child_content
 
 
 def attachments_data_pipeline(write=True):
-    query = "select content_id::text, public_url, public_updated_at, title, publishing_orgs, primary_publishing_org, document_type,categories, publishing_app, attachments, attachment_titles, linked_content_raw from content__regulation"
+    print("attachments_data_pipeline: starting")
+    query = "select CAST(content_id AS text), public_url, public_updated_at, title, publishing_orgs, primary_publishing_org, document_type,categories, publishing_app, attachments, attachment_titles, withdrawn, linked_content_raw from example_catalogue_schema.example_content_table_notaxons"
 
-    gov_uk_content = *database_connection*.query(query)
+    print("attachments_data_pipeline: querying gov_uk_content")
+    gov_uk_content = db.query(query)
 
+    gov_uk_content["withdrawn"] = gov_uk_content["withdrawn"].fillna(False)
+
+    print(
+        f"attachments_data_pipeline: identifying child content ({len(gov_uk_content)} rows)"
+    )
     child_content = identify_child_content(gov_uk_content)
 
     # do not include certain types of content
@@ -563,12 +689,14 @@ def attachments_data_pipeline(write=True):
 
     child_content["is_attachment"] = True
     if write:
-        write_to_*file_read_connection*(
+        print("attachments_data_pipeline: writing to s3")
+        write_to_s3(
             child_content,
-            "gov_uk_attachments",
+            "example_attachments_table",
             convert_cols=["publishing_orgs", "categories"],
         )
 
+    print(f"attachments_data_pipeline: done ({len(child_content)} rows)")
     return child_content
 
 
@@ -589,6 +717,7 @@ def get_total_headings(df):
         else:
             return None
 
+    print(f"get_total_headings: starting for {len(df)} rows")
     # heading count
     h1_count = df["html"].apply(lambda x: count_matches(x, "<h1 .*</h1>"))
     h2_count = df["html"].apply(lambda x: count_matches(x, "<h2 .*</h2>"))
@@ -597,6 +726,7 @@ def get_total_headings(df):
     h5_count = df["html"].apply(lambda x: count_matches(x, "<h5 .*</h5>"))
 
     total_headings = h1_count + h2_count + h3_count + h4_count + h5_count
+    print("get_total_headings: done")
     return total_headings
 
 
@@ -606,20 +736,21 @@ def get_pdf_text_lookup():
     We could consider saving this as a sql table so we do not need to repeat this conversion everytime we update the content table
 
     """
-    with *file_read_connection*.read(
-        path="RLP/screaming_frog/pdf/Pdf_full_text_dataframe.csv",
-        team="analysis_group_ds",
+    print("get_pdf_text_lookup: starting")
+    with s3.read(
+        path="path/to/crawl_data/pdf/pdf_full_text_dataframe.csv",
+        team="example_team",
     ) as f:
         pdf_text_df = pd.read_csv(f)
 
-    pdf_text_df = (
-        pdf_text_df.set_index("pdf_url")
-        .drop(columns=["pdf_text", "Unnamed: 0"])
-        .dropna()
-    )
+    pdf_text_df = pdf_text_df.set_index("url").dropna()
+    print(f"get_pdf_text_lookup: read pdf text data ({len(pdf_text_df)} rows)")
 
-    query = "select distinct(public_url) from attachment_urls where file_extension = 'pdf'"
-    pdf_attachment_data = *database_connection*.query(query)
+    query = "select distinct(public_url) from example_shared_schema.example_attachments_table where file_extension = 'pdf'"
+    pdf_attachment_data = db.query(query)
+    print(
+        f"get_pdf_text_lookup: queried pdf attachment data ({len(pdf_attachment_data)} rows)"
+    )
 
     # pdf url is badly formatted. Apply the same formatting to public url so we can match it
     pdf_attachment_data["matching_url"] = pdf_attachment_data["public_url"].copy()
@@ -630,7 +761,7 @@ def get_pdf_text_lookup():
         "matching_url"
     ].str.replace(r"/", "_")
     pdf_attachment_data.loc[:, "matching_url"] = (
-        pdf_attachment_data["matching_url"] + ".txt"
+        "pdf_texts/" + pdf_attachment_data["matching_url"] + ".txt"
     )
 
     pdf_text_lookup = pdf_attachment_data.merge(
@@ -640,7 +771,8 @@ def get_pdf_text_lookup():
         validate="1:1",
         how="inner",
     )
-    return pdf_text_lookup.drop(columns="matching_url")
+    print(f"get_pdf_text_lookup: done ({len(pdf_text_lookup)} rows)")
+    return pdf_text_lookup
 
 
 def fill_na_from_parent(
@@ -663,15 +795,14 @@ def fill_na_from_parent(
     data.loc[:, column] = data[column].fillna(data[parent_column])
 
     return data[column]
-    # data.loc[:, "categories"] = data["categories"].apply(lambda x: x if isinstance(x, list) else [])
 
 
 def create_full_data(
-    content_table,
-    attachments_table,
-    ga_table,
-    sf_table,
-    rules_config,
+    content_table="example_catalogue_schema.example_content_table_notaxons",
+    attachments_table="example_shared_schema.example_attachments_table",
+    ga_table="example_shared_schema.example_ga_table",
+    sf_table="example_shared_schema.example_crawl_table",
+    rules_config="rules.yaml",
     max_text_length=10000,
 ):
     """
@@ -686,8 +817,9 @@ def create_full_data(
         Uses tf-idf to derive the html equivalent for pdf pages
         Uses rules.yaml to make recommendations
 
-    this function returns a dataframe so you can run it for testing without needing to save it to *file_read_connection* or catalogue
+    this function returns a dataframe so you can run it for testing without needing to save it to s3 or catalogue
     """
+    print("create_full_data: starting")
     # this query is for attachments that do not have a content_id, and therefore must inherit some
     # attributes from their parent
 
@@ -738,8 +870,10 @@ def create_full_data(
           gov_uk_content.public_url = attachments.public_url
     """
 
-    attachment_data = *database_connection*.query(attachment_query)
-    content_data = *database_connection*.query(content_query)
+    attachment_data = db.query(attachment_query)
+    print(f"create_full_data: queried attachment data ({len(attachment_data)} rows)")
+    content_data = db.query(content_query)
+    print(f"create_full_data: queried content data ({len(content_data)} rows)")
 
     list_cols = ["publishing_orgs", "categories"]
 
@@ -758,6 +892,9 @@ def create_full_data(
         "primary_publishing_org"
     ].str.replace(r'(^\[")|("\]$)', "", regex=True)
     all_data = pd.concat([content_data, attachment_data], ignore_index=True)
+    print(
+        f"create_full_data: concatenated content and attachment data ({len(all_data)} rows)"
+    )
 
     # use sf title if available
     all_data["title"] = all_data["title"].fillna(all_data["title_1"])
@@ -776,6 +913,7 @@ def create_full_data(
 
     for col in fill_na_from_parent_columns:
         all_data[col] = fill_na_from_parent(all_data, col)
+    print("create_full_data: filled na from parent columns")
 
     # put the remaining na categories back into empty list form
     all_data.loc[:, "categories"] = all_data["categories"].apply(
@@ -789,6 +927,7 @@ def create_full_data(
         "is_broken",
         "is_redirecting",
         "is_historic",
+        "withdrawn",
     ]
     for col in bool_columns:
         all_data[col] = all_data[col].fillna(False)
@@ -818,12 +957,9 @@ def create_full_data(
     all_data = all_data.sort_values(
         by=["grouping_id", "is_parent"], ascending=[True, False]
     )
-
-    # all_data.set_index("grouping_id", inplace=True)
-    ##data.columns = data.columns.str.replace("column_name_", "")
+    print("create_full_data: set grouping_id and is_parent")
 
     date_columns = [
-        # "non_html_last_modified",
         "public_updated_at",
         "date_published",
         "pdf_modified",
@@ -832,12 +968,23 @@ def create_full_data(
     for col in date_columns:
         all_data[col] = pd.to_datetime(all_data[col])
 
+    print("create_full_data: fetching pdf text lookup")
     pdf_text_lookup = get_pdf_text_lookup()
     all_data = all_data.merge(
         pdf_text_lookup, on="public_url", how="left", validate="m:1"
     )
-    all_data["text"] = all_data["text"].fillna(all_data["pdf_text_clean"])
-    all_data = all_data.drop(columns="pdf_text_clean")
+
+    n_text_rows = (~all_data["pdf_clean"].isna()).sum()
+
+    print(f"pdf text rows matched: {n_text_rows}")
+    all_data["text"] = all_data["text"].fillna(all_data["pdf_clean"])
+    all_data = all_data.drop(columns="pdf_clean")
+    print("create_full_data: merged pdf text lookup")
+
+    # use actual word count if it exists.
+    word_count = all_data["text"].str.split().str.len()
+    word_count = word_count.fillna(all_data["word_count"])
+    all_data["word_count"] = word_count
 
     text_columns = [
         "title",
@@ -856,7 +1003,6 @@ def create_full_data(
         lambda x: " ".join(str(x).split()[:max_text_length])
     )
 
-
     drop_cols = [
         "format",
         "attachments",
@@ -870,6 +1016,7 @@ def create_full_data(
     ]
     all_data = all_data.drop(drop_cols, axis=1)
 
+    print("create_full_data: computing heading counts")
     total_headings = get_total_headings(all_data)
     # avoid div by zero
     word_to_heading_ratio = all_data["word_count"] / total_headings.apply(
@@ -887,26 +1034,33 @@ def create_full_data(
     )
 
     all_data = all_data.drop_duplicates(subset=["parent_public_url", "public_url"])
+    print(f"create_full_data: finding accessible pdf versions ({len(all_data)} rows)")
     pdf_lookup = dc.find_accessible_version_of_pdf(all_data, threshold=0.8)
 
-    all_data["withdrawn"] = False
-    all_data = all_data.merge(pdf_lookup, how="left", on=["parent_public_url", "public_url"], validate="1:1")
-    all_data["accessible_url"] = all_data.apply(lambda row: row["public_url"] if row["file_extension"] == "html" else row["accessible_url"], axis=1)
+    all_data = all_data.merge(
+        pdf_lookup, how="left", on=["parent_public_url", "public_url"], validate="1:1"
+    )
+    all_data["accessible_url"] = all_data.apply(
+        lambda row: row["public_url"]
+        if row["file_extension"] == "html"
+        else row["accessible_url"],
+        axis=1,
+    )
     all_data["is_pdf_with_accessible_version"] = (
         (all_data["file_extension"] == "pdf")
         & all_data["screaming_frog_available"]
         & (all_data["accessible_url_confidence_score"] >= 0.9)
     )
 
+    print("create_full_data: running rule engine")
     engine = MultiCategoryRuleEngine(all_data)
 
     all_data = engine.pipeline("../audit_tool_streamlit/rules.yaml")
 
-
     # redirecting pages are not useful to show in the final dataset
     all_data = all_data[~all_data["is_redirecting"]]
 
-
+    print(f"create_full_data: done ({len(all_data)} rows)")
     return all_data
 
 
@@ -931,14 +1085,14 @@ if __name__ == "__main__":
         if save_new_content:
             write_to_catalogue(
                 data,
-                "schema_name", 
-                "table_name",
+                "example_catalogue_schema",
+                "example_content_table",
                 convert_cols=[
                     "publishing_orgs",
                     "categories",
                     "negative_user_engagement_reasons",
                     "accessibility_reasons",
                     "freshness_reasons",
-                    "functionality_reasons"
+                    "functionality_reasons",
                 ],
             )

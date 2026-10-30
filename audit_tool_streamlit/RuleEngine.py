@@ -49,9 +49,7 @@ OP_MAP = {
 }
 
 
-NULL_CONDITION_RE = re.compile(
-    r"^\s*(\w+)\s+IS\s+(NOT\s+)?NULL\s*$", re.IGNORECASE
-)
+NULL_CONDITION_RE = re.compile(r"^\s*(\w+)\s+IS\s+(NOT\s+)?NULL\s*$", re.IGNORECASE)
 
 CONDITION_RE = re.compile(r"^\s*(\w+)\s*(==|!=|>=|<=|>|<|IN)\s*(.+)\s*$", re.IGNORECASE)
 
@@ -153,8 +151,11 @@ def _piecewise_linear(x: pd.Series, anchors, na_value=0.0) -> pd.Series:
 def freshness_age_score(age_years: pd.Series) -> pd.Series:
     """Piecewise-linear freshness score interpolated between FRESHNESS_ANCHORS
     (age in years -> score), capped at the final anchor's score beyond it.
+    Content under 3 years old is never flagged, so its score is forced to 0.
     """
-    return _piecewise_linear(age_years, FRESHNESS_ANCHORS, na_value=0.0)
+    score = _piecewise_linear(age_years, FRESHNESS_ANCHORS, na_value=0.0)
+    score[age_years < 3] = 0.0
+    return score
 
 
 DEMAND_ANCHORS = [(0, 0.6), (0.20, 1.0), (0.75, 1.5), (0.95, 2.0)]
@@ -166,7 +167,7 @@ DEMAND_ANCHORS_NON_HTML_ATTACHMENT = [(0, 0.6), (0.55, 1.0), (0.75, 1.5), (0.95,
 # non-html (e.g. pdf): accessibility 11 (critical no-accessible-alternative +
 # hard to read + hard to scan) + the same functionality/engagement/freshness
 # maxima. Used to normalise base_score onto a common 0-100 scale.
-MAX_BASE_SCORE_HTML_PAR = 25
+MAX_BASE_SCORE_HTML_PAR = 20
 MAX_BASE_SCORE_HTML_ATT = 20
 MAX_BASE_SCORE_NON_HTML = 25
 
@@ -176,6 +177,36 @@ def demand_rank_score(demand_rank: pd.Series, anchors=DEMAND_ANCHORS) -> pd.Seri
     (demand_rank -> multiplier), capped at the final anchor's value beyond it.
     """
     return _piecewise_linear(demand_rank, anchors, na_value=1.0)
+
+
+def get_recommendation(
+    base_score: pd.Series,
+    demand: pd.Series,
+    freshness_score: pd.Series,
+    withdrawn: pd.Series,
+) -> np.ndarray:
+    """Decide the recommendation for each row.
+
+    Checked in priority order, first match wins:
+    1. Withdrawn content -> "Remove"
+    2. No issues flagged (base_score == 0) -> "No action"
+    3. No demand and 10+ years stale (freshness_score >= 3) -> "Remove"
+    4. Otherwise -> "Review"
+
+    Content with no freshness date can't reach step 3 anyway, since
+    freshness_score is 0 when age can't be computed - so it falls to
+    "No action" or "Review" like any other row, never "Remove".
+    """
+    no_demand_and_stale = (demand == "No Demand") & (freshness_score >= 3)
+
+    conditions = [
+        withdrawn,
+        base_score < 1,
+        no_demand_and_stale,
+    ]
+    choices = ["Remove", "No action", "Remove"]
+
+    return np.select(conditions, choices, default="Review")
 
 
 class MultiCategoryRuleEngine:
@@ -240,13 +271,6 @@ class MultiCategoryRuleEngine:
                     lambda lst: lst + [value]
                 )
 
-    def get_report(self):
-        return (
-            pd.DataFrame(self.rules)
-            .drop(columns=["variant", "condition"])
-            .drop_duplicates()
-        )
-
     def _flag_score(self, flags: pd.Series) -> pd.Series:
         return flags.apply(
             lambda lst: sum(self.base_score_dict.get(item, 0) for item in lst)
@@ -271,7 +295,10 @@ class MultiCategoryRuleEngine:
                 & (self.df["file_extension"] == "html"),
                 MAX_BASE_SCORE_HTML_ATT,
             ),
-            (self.df["is_attachment"] & (self.df["file_extension"] != "html"), MAX_BASE_SCORE_NON_HTML),
+            (
+                self.df["is_attachment"] & (self.df["file_extension"] != "html"),
+                MAX_BASE_SCORE_NON_HTML,
+            ),
         ]
 
         self.df["demand_rank"] = np.nan
@@ -279,8 +306,10 @@ class MultiCategoryRuleEngine:
             self.df.loc[mask, "demand_rank"] = rank(self.df.loc[mask, "sessions"])
         self.df["engagement_rank"] = rank(self.df["engagement_time_secs"])
         self.df["broken_link_ratio"] = (
-            self.df["n_broken_links"] / self.df["n_links"]
-        ).replace([np.inf, -np.inf], np.nan).fillna(0)
+            (self.df["n_broken_links"] / self.df["n_links"])
+            .replace([np.inf, -np.inf], np.nan)
+            .fillna(0)
+        )
 
         self.load_config_from_yaml(config_yaml)
         self.load_rules_from_config()
@@ -307,7 +336,7 @@ class MultiCategoryRuleEngine:
             anchors=DEMAND_ANCHORS_NON_HTML_ATTACHMENT,
         )
 
-        data_quality_exclusion = self.df["exclusions_flag"].str[0] == True
+        data_quality_exclusion = self.df["exclusions_flag"].str[0].eq(True)
 
         accessibility_score = self._flag_score(self.df["accessibility_flag"])
         functionality_score = self._flag_score(self.df["functionality_flag"])
@@ -321,9 +350,7 @@ class MultiCategoryRuleEngine:
         # freshness_flag/freshness_reasons (from rules.yaml) are still used for
         # the human-readable reason text.
         freshness_date = self.df["public_updated_at"].fillna(self.df["pdf_modified"])
-        age_years = (
-            pd.Timestamp.today().normalize() - freshness_date
-        ).dt.days / 365.25
+        age_years = (pd.Timestamp.today().normalize() - freshness_date).dt.days / 365.25
         freshness_score = freshness_age_score(age_years)
 
         freshness_score[data_quality_exclusion] = 0
@@ -335,27 +362,25 @@ class MultiCategoryRuleEngine:
             + freshness_score
         )
 
-        recommendation = np.where(
-            base_score == 0,
-            "No action",
-            np.where(
-                (demand == "No Demand") & (freshness_score >= 3), "Remove", "Review"
-            ),
+        withdrawn = self.df["withdrawn"]
+
+        recommendation = get_recommendation(
+            base_score=base_score,
+            demand=demand,
+            freshness_score=freshness_score,
+            withdrawn=withdrawn,
         )
 
-        # Withdrawn content is scored on its own route: it always gets a
-        # nominal base/adjusted score and an automatic "Remove" recommendation,
-        # regardless of the flags/scores computed above.
-        withdrawn = self.df["withdrawn"]
         base_score = np.where(withdrawn, 1, base_score)
 
         # Same three groups used for demand_rank above, so that the
         # normalisation ceiling lines up with the population each row's
         # demand_rank was computed against.
-        max_base_score = np.select([mask for mask, _ in groups], [score for _, score in groups])
+        max_base_score = np.select(
+            [mask for mask, _ in groups], [score for _, score in groups]
+        )
         normalized_score = base_score / max_base_score * 100
         adjusted_score = demand_multiplier * normalized_score
-        recommendation = np.where(withdrawn, "Remove", recommendation)
         recommend_transfer_to_tna = withdrawn
 
         recommend_convert = self.df["accessibility_reasons"].apply(
@@ -407,7 +432,8 @@ class MultiCategoryRuleEngine:
                 "No issues found",
                 "Recommend remove because content is withdrawn",
                 "Recommend remove because content has no traffic and has not been updated in more than 10 years",
-                "Review recommendation based on the following issues: " + combined_reasons,
+                "Review recommendation based on the following issues: "
+                + combined_reasons,
             ],
             default="",
         )
@@ -446,9 +472,9 @@ class MultiCategoryRuleEngine:
 
 
 if __name__ == "__main__":
-    from data_selection import load_data_with_filters
+    from data_selection import fetch_scope
 
-    df = load_data_with_filters()
+    df = fetch_scope("", {}, "*")
 
     df = df.drop(
         columns=[
