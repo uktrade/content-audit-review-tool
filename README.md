@@ -35,7 +35,7 @@ Together, these components provide a consistent, repeatable way to audit large v
 
 CART is designed around a specific technical setup and is not directly portable:
 
-- Implemented in DBT's Data Workspace - a secure data environment
+- Implemented in the Department for Business, Innovation, Science and Trade (BIST)'s secure data environment, Data Workspace
 - Uses Streamlit for presenting outputs
 - Assumes access to GA4 export data and crawl outputs
 - Built around GOV.UK-specific structures (for example URLs, document types and formats), so would require adaptation to work with other content platforms
