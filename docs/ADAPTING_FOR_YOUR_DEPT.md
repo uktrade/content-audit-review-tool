@@ -2,9 +2,9 @@
  
 ## Purpose
  
-This document explains what another government department or agency needs to consider before adapting the Content Audit Review Tool for its own GOV.UK content.
+This document explains what another government department or agency needs to consider before adapting the Content Audit Review Tool (CART) for its own GOV.UK content.
  
-The tool was developed in the Department for Business and Trade (DBT). It depends on the data sources, access permissions, secure environment and technical support available to DBT.
+The tool was developed in the Department for Business, Innovation, Science and Trade (BIST). It depends on the data sources, access permissions, secure environment and technical support available to BIST.
  
 Other organisations may be able to reuse the audit approach, rules, data model and documentation. They should not assume they can copy the tool and run it unchanged.
  
@@ -33,7 +33,7 @@ Departments are most likely to reuse:
  
 ## 1. Secure data environment
  
-DBT’s version of the tool ingests and analyses data in Data Workspace.
+BIST’s version of the tool ingests and analyses data in Data Workspace.
  
 The tool combines several datasets, including GOV.UK analytics data that is not publicly available. Departments adapting the tool need a secure environment that can:
  
@@ -79,7 +79,7 @@ The tool uses GOV.UK Google Analytics data to understand reach and engagement.
  
 Depending on the audit scope, the pipeline may need analytics for both HTML and non-HTML content.
  
-DBT’s performance analysts use GOV.UK GA4 data accessed through approved internal routes. This includes BigQuery-based GOV.UK GA4 datasets and a flattened production dataset that is easier to query for analysis and reporting.
+BIST's performance analysts use GOV.UK GA4 data accessed through approved internal routes. This includes BigQuery-based GOV.UK GA4 datasets and a flattened production dataset that is easier to query for analysis and reporting.
  
 Departments adapting the tool need to confirm:
  
@@ -93,7 +93,8 @@ Analytics data should be treated as non-public data.
  
 ### Crawl data
  
-DBT’s audit tool uses a web crawler developed by a third party, Screaming Frog, to produce crawl data.
+BIST’s audit tool uses a web crawler developed by a third party, Screaming Frog, to produce crawl data.
+
 Importantly, the crawler also scrapes PDFs for all text content, which allows for keyword filtering and textual analysis of PDFs.  
  
 Departments that want to adopt this part of the approach need:
@@ -112,9 +113,9 @@ For cleansing and standardisation logic, see `docs/TRANSFORMATION.md`
  
 ## 3. Running Streamlit in the secure data environment
  
-DBT presents the analysed data through a Streamlit dashboard.
+BIST presents the analysed data through a Streamlit dashboard.
  
-Streamlit is an open-source Python framework for building data apps. In DBT’s setup, Streamlit runs inside Data Workspace.
+Streamlit is an open-source Python framework for building data apps. In BIST's setup, Streamlit runs inside Data Workspace.
  
 Departments that want to reuse the dashboard code need to confirm they can:
  
@@ -129,7 +130,7 @@ Using Streamlit may require approval from IT, security or platform teams.
  
 If a department cannot use Streamlit, it may still be able to reuse the audit rules, data dictionary and recommendation logic. It is unlikely to be able to reuse the dashboard code without significant changes.
  
-For executable logic, see`docs/FLAGGING_RULES.md`
+For executable logic, see `docs/FLAGGING_RULES.md`
 For the flag rule descriptions, see `audit-tool-streamlit/rules.yaml`
  
 ## 4. Alternative dashboard or reporting tools
@@ -214,17 +215,4 @@ Departments should start with a limited implementation.
  
 10. **Plan the next phase** 
    Decide whether to scale, integrate with content lifecycle tools, or develop a more production-ready service.
- 
-## 8. Readiness checklist
- 
-Before adapting the tool, departments should confirm that they have:
- 
-[ ] a clear content scope
-[ ] a secure environment for processing data
-[ ] access to GOV.UK content and metadata
-[ ] access to relevant GOV.UK GA4 data
-[ ] access to a crawl tool or equivalent crawl data
-[ ] people with the skills to build pipelines, analyse data and maintain the dashboard
-[ ] content specialists who can interpret outputs
-[ ] approval to use Streamlit or an alternative dashboard/reporting tool
-[ ] a plan for reviewing and acting on the findings
+
