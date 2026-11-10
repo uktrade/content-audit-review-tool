@@ -2,7 +2,7 @@
 
 ## Purpose of the tool
 
-CART has been developed by the Proactive Content Management team in the Trade and Regulatory Services directorate of the Department for Business and Trade (DBT).
+CART has been developed by the Proactive Content Management team in the Trade and Regulatory Services directorate of the Department for Business, Innovation, Science and Trade (BIST).
 
 It identifies business guidance on GOV.UK that may need to be fixed, reviewed or removed.
 
@@ -16,11 +16,11 @@ The tool does not make final content decisions. It provides evidence and priorit
 
 ## Background
 
-DBT owns and contributes to a large amount of business guidance on GOV.UK. As part of its commitment to reducing the administrative burden on businesses, DBT also has an important role in helping ensure that regulatory guidance for businesses across GOV.UK is clear, usable, up to date and fit for purpose.
+BIST owns and contributes to a large amount of business guidance on GOV.UK. As part of its commitment to reducing the administrative burden on businesses, BIST also has an important role in helping ensure that regulatory guidance for businesses across GOV.UK is clear, usable, up to date and fit for purpose.
 
 This includes content published by other departments and agencies.
 
-Content improvement work starts with understanding what content already exists. But auditing large volumes of content is difficult. Current estimates suggest the GOV.UK business guidance estate could contain between 100,000 and 200,000 pages, and it continues to grow faster than teams can realistically review manually.
+Content improvement work starts with understanding what content already exists. But auditing large volumes of content is difficult. Current estimates suggest the GOV.UK business guidance estate could contain many hundreds of thousands of pages and files, and it continues to grow faster than teams can realistically review manually.
 
 The tool has been developed to make large-scale content auditing quicker, more consistent, repeatable and evidence-based.
 
@@ -33,7 +33,7 @@ It is intended to support content improvement by:
 
 ## Who the tool is for
 
-The tool is currently used directly by a small number of DBT content designers in the Proactive Content Management team.
+The tool is currently used directly by a small number of BIST content designers in the Proactive Content Management team.
 
 These content designers use the tool to explore content data, identify potential issues, prioritise content for review and produce outputs for other teams and stakeholders.
 
@@ -41,11 +41,11 @@ Other users are consumers of the tool’s outputs, rather than direct users of t
 
 These audiences include:
 
-- content owners, such as policy teams and service owners in DBT and other government departments, who need to understand the state of their content
-- content designers in DBT and other government departments, who may need to support content owners to review and improve content
+- content owners, such as policy teams and service owners in BIST and other government departments, who need to understand the state of their content
+- content designers in BIST and other government departments, who may need to support content owners to review and improve content
 - senior decision makers, such as heads of content, policy leads and service owners, who may need to agree priorities, resource or action for content improvement work
 
-The tool’s outputs include raw CSV data, prioritised content recommendations and summary reports.
+The tool’s outputs include raw CSV data and prioritised content recommendations.
 
 These outputs help teams:
 
@@ -78,18 +78,20 @@ The tool applies rules to identify content that may not meet certain content qua
 
 The rules look at broad areas such as:
 
-- usability
-- accessibility
+- usability and accessibility
 - freshness
-- relevance to user needs
+- functionality
+- user engagement
 
 They flag issues such as:
 
-- low or no traffic
-- broken links
-- outdated or potentially stale content
 - PDFs without accessible HTML alternatives
 - content that may be too long or hard to use
+- outdated or potentially stale content
+- broken links or pages that cannot be reached
+- users bouncing off a page too quickly to have completed an action
+
+User demand for content (derived from sessions over a 12-month period) is used to rank content. Content that has flagged issues and high user demand is ranked higher than content with the same issues and lower user demand.   
 
 The rules are not proof that content is bad. They are signals that a human may need to consider the content for review, removal, improvement or conversion.
 
@@ -123,7 +125,7 @@ This work is limited by the current data structure and platform.
 
 More advanced search and discovery features such as semantic search will likely need a more scalable technical approach.
 
-Further developments in this area will be documented in this repository.
+Any further developments in this area will be documented in this repository.
 
 ### 5. LLM-assisted fact checking
 
@@ -133,7 +135,7 @@ The aim is to explore whether LLMs can help identify content that may contain fa
 
 This work is exploratory.
 
-Further developments in this area will be documented in this repository.
+Any further developments in this area will be documented in this repository.
 
 ## How the analysis works
 
@@ -144,9 +146,12 @@ Behind the scenes, the typical flow is:
 1. Content and metadata are collected from GOV.UK.
 2. Analytics and crawl data are joined to the content dataset.
 3. Flag rules are applied.
-4. Content items receive issue flags and recommendations.
+4. Content items receive issue flags and recommendations for action.
+5. Content items are also given a score based on the number and type of issues found.
+6. Each score is then adjusted using a modifier based on the amount of traffic the content has received.
+7. The final, adjusted score is used to create a priority list of all content that needs attention.
 
-From a user’s point of view, DBT content designers can:
+From a user’s point of view, BIST content designers can:
 
 1. Explore the results in the dashboard.
 2. Export CSV subsets for review or reporting.
@@ -164,7 +169,7 @@ Example: this page has broken links.
 
 A recommendation is the tool’s suggested next step based on one or more signals.
 
-Example: strong candidate for review.
+Example: Review.
 
 ### Decision
 
@@ -182,20 +187,16 @@ It works from start to finish and can:
 
 - bring together GOV.UK metadata, analytics and crawl data
 - apply flagging rules
-- show results in a dashboard
+- show ranked results in a dashboard
 - export filtered CSVs
 
+Future phases of work will likely focus on:
 
-The next phases of work will focus on:
-
-- improving and expanding the content pipeline from GOV.UK
+- removing our dependency on Screaming Frog as a third-party web crawler
+- automating all data collection and aggregation 
 - expanding the list of content issues the tool can detect
-- refining the red-flag rules and related recommendations for action
 - tracking offline decisions from content reviews and incorporating them into the tool, to avoid reviewed content being flagged again
-- improving dashboard functionality and usability
-- productionising content recommendation reports
 - exploring whether LLMs can be used to flag potential inaccuracies in content
-- exploring the ongoing suitability of Streamlit as a platform for the tool
 
 For more detail, see:
 
@@ -242,9 +243,6 @@ The dashboard is currently built in Streamlit. This has helped the team move qui
 
 The tool can identify content that may need action, but it does not yet provide a mature way to record review decisions, action status or ownership back into the tool.
 
-This is a key area for future work.
-
 ## Related documentation
 
 Detailed documentation sits outside this overview.
-
