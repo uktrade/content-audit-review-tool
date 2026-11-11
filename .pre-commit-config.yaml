@@ -1,6 +1,6 @@
 repos:
   - repo: https://github.com/uktrade/github-standards
-    rev: v1.3.0
+    rev: v1.4.7
     hooks:
       - id: run-security-scan
         verbose: false
@@ -10,7 +10,7 @@ repos:
         verbose: false
         
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.5.0
+    rev: v0.17.4
     hooks:
       - id: ruff
       - id: ruff-format
